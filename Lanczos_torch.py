@@ -1,10 +1,10 @@
-import numpy as np
+import torch
 
 def Lanczos(A, k):
     """
-    Lanczos iteration algorithm on a real symmetric matrix using numpy.
+    Lanczos iteration algorithm on a real symmetric matrix using Pytorch.
     Input: A is a real symmetrix matrix of size, say, n.
-           k is the number of Lanczos vector requested. In typical applications, k << n.
+           k is the number of Lanczos vectors requested. In typical applications, k << n.
     Output: A tuple (Qk, T), where Qk = (q1 q2 ... qk) is a n*k matrix, whose columns contain k orthomormal Lanczos vectors q1, q2, ..., qk.
             I.e., we have Qk^T * Qk = I_k, where I_k is the k-dimensional identity matrix.
             T is a tridiagonal matrix of size k.
@@ -22,63 +22,81 @@ def Lanczos(A, k):
     approach is adopted to cure this problem.
     """
     n = A.shape[0]
-    Qk = np.zeros((n, k))
-    alphas = np.zeros(k)
-    betas = np.zeros(k - 1)
-    q = np.random.randn(n)
-    q = q / np.linalg.norm(q)
-    u = np.dot(A, q)
-    alpha = np.dot(q, u)
+    Qk = torch.zeros((n, k), dtype=A.dtype)
+    alphas = torch.zeros(k, dtype=A.dtype)
+    betas = torch.zeros(k - 1, dtype=A.dtype)
+    q = torch.randn(n, dtype=A.dtype)
+    q = q / torch.norm(q)
+    u = torch.matmul(A, q)
+    alpha = torch.matmul(q, u)
     Qk[:, 0] = q
     alphas[0] = alpha
     beta = 0
-    qprime = np.random.randn(n)
+    qprime = torch.randn(n, dtype=A.dtype)
     for i in range(1, k):
         r = u - alpha * q - beta * qprime
 
         # The simple but expensive full reorthogonalization process in order to recover the orthogonality among the Lanczos vectors caused by
         # rounding error in floating point arithmetic.
-        r -= np.dot(Qk[:, :i], np.dot(Qk[:, :i].T, r))
+        r -= torch.matmul(Qk[:, :i], torch.matmul(Qk[:, :i].T, r))
 
         qprime = q
-        beta = np.linalg.norm(r)
+        beta = torch.norm(r)
         q = r / beta
-        u = np.dot(A, q)
-        alpha = np.dot(q, u)
+        u = torch.matmul(A, q)
+        alpha = torch.matmul(q, u)
         alphas[i] = alpha
         betas[i - 1] = beta
         Qk[:, i] = q
-    T = np.diag(alphas) + np.diag(betas, k=1) + np.diag(betas, k=-1)
+    T = torch.diag(alphas) + torch.diag(betas, diagonal=1) + torch.diag(betas, diagonal=-1)
     return Qk, T
+
+def symeigLanczos(A, k, extreme="both"):
+    """
+    This function computes the extreme(minimum or maximum, or both) eigenvalues and corresponding eigenvectors of a real symmetric matrix A
+    based on Lanczos algorithm.
+    Input: A is the real symmetric matrix to be diagonalized.
+           k is the number of Lanczos vectors requested.
+           extreme labels which of the two extreme eigenvalues and corresponding eigenvectors are returned.
+            "both" -> both min and max.     --Output--> (eigval_min, eigvector_min, eigval_max, eigvector_max)
+            "min" -> min.                   --Output--> (eigval_min, eigvector_min)
+            "max" -> max.                   --Output--> (eigval_max, eigvector_max)
+    Output: As shown in "Input" section above. Note all the elements of returned tuples are torch Tensors, including the eigenvalues.
+    """
+    Qk, T = Lanczos(A, k)
+    eigvalsQ, eigvectorsQ = torch.symeig(T, eigenvectors=True)
+    eigvectorsQ = torch.matmul(Qk, eigvectorsQ)
+    if extreme == "both":
+        return eigvalsQ[0], eigvectorsQ[:, 0], eigvalsQ[-1], eigvectorsQ[:, -1]
+    elif extreme == "min":
+        return eigvalsQ[0], eigvectorsQ[:, 0]
+    elif extreme == "max":
+        return eigvalsQ[-1], eigvectorsQ[:, -1]
 
 if __name__ == "__main__":
     import time
-    n = 5000
-    A = 0.1 * np.random.rand(n, n)
+    n = 8000
+    A = 0.1 * torch.rand(n, n, dtype=torch.float64)
     A = A + A.T
     k = 300
-    print("----- Test for Lanczos algorithm implemented using Numpy -----")
+    print("----- Test for Lanczos algorithm implemented using Pytorch -----")
     print("----- Dimension of real symmetric matrix A: %d -----" % n)
 
     start = time.time()
-    Qk, T = Lanczos(A, k)
-    #print("Qk^T * Qk = ", np.dot(Qk.T, Qk))
-    eigvalsQ, eigvectorsQ = np.linalg.eigh(T)
-    #print("eigvectorsQ.T * eigvectorsQ = ", np.dot(eigvectorsQ.T, eigvectorsQ))
-    eigvectorsQ = np.dot(Qk, eigvectorsQ)
+    eigval_min, eigvector_min, eigval_max, eigvector_max = symeigLanczos(A, k)
     end = time.time()
     print("Lanczos results:")
-    print("lambda_min: ", eigvalsQ[0], "lambda_max: ", eigvalsQ[-1], "running time: ", end - start)
+    print("lambda_min: ", eigval_min.item(), "lambda_max: ", eigval_max.item(), "running time: ", end - start)
 
     start = time.time()
-    eigvals, eigvectors = np.linalg.eigh(A)
+    eigvals, eigvectors = torch.symeig(A, eigenvectors=True)
     end = time.time()
     print("Direct diagonalization results:")
-    print("lambda_min: ", eigvals[0], "lambda_max: ", eigvals[-1], "running time: ", end - start)
+    print("lambda_min: ", eigvals[0].item(), "lambda_max: ", eigvals[-1].item(), "running time: ", end - start)
     print("The difference between corresponding eigenvectors:")
     print("The 2-norm of the difference of v_mins corresponding to smallest eigenvalue lambda_min using two methods: ", 
-            np.linalg.norm(eigvectorsQ[:, 0] - eigvectors[:, 0]),
-            np.linalg.norm(eigvectorsQ[:, 0] + eigvectors[:, 0]))
+            torch.norm(eigvector_min - eigvectors[:, 0]).item(),
+            torch.norm(eigvector_min + eigvectors[:, 0]).item())
     print("The 2-norm of the difference of v_maxs corresponding to largest eigenvalue lambda_max using two methods: ", 
-            np.linalg.norm(eigvectorsQ[:, -1] - eigvectors[:, -1]),
-            np.linalg.norm(eigvectorsQ[:, -1] + eigvectors[:, -1]))
+            torch.norm(eigvector_max - eigvectors[:, -1]).item(),
+            torch.norm(eigvector_max + eigvectors[:, -1]).item())
