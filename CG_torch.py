@@ -40,7 +40,7 @@ def CG_torch(A, b, initialx, sparse=False):
         alpha = torch.matmul(r, r) / Amap(d).matmul(d)
     return x
 
-class CG_subspace(torch.autograd.Function):
+class CGSubspace(torch.autograd.Function):
     @staticmethod
     def forward(ctx, A, b, alpha0):
         ctx.dim = b.shape[0]

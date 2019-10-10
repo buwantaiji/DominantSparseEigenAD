@@ -1,12 +1,13 @@
-"""
-    A simple, artificial 2-dimensional low-rank linear system.
+########
+#    A simple, artificial 2-dimensional low-rank linear system.
+#
+#    Used for correctness-checking and demonstration of the
+#CG_subspace torch.autograd.Function primitive.
+########
 
-    Used for correctness-checking and demonstration of the
-CG_subspace torch.autograd.Function primitive.
-"""
 import sys
 sys.path.append("..")
-from CG_torch import CG_subspace
+from CG_torch import CGSubspace
 import torch
 
 # Constructing a simple computation graph
@@ -28,7 +29,7 @@ A = alpha.matmul(A0).matmul(alpha) * (alpha[:, None] * alpha)
 b = torch.matmul(alpha, b0) * alpha
 
 # Forward and backward of CG
-CG = CG_subspace.apply
+CG = CGSubspace.apply
 x = CG(A, b, alpha0)
 dresult, = torch.autograd.grad(torch.matmul(x, z), alpha0)
 

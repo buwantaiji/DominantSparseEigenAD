@@ -103,6 +103,26 @@ def symeigLanczos(A, k, extreme="both", *, sparse=False, dim=None):
     elif extreme == "max":
         return eigvalsQ[-1], eigvectorsQ[:, -1]
 
+class DominantSymeig(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, A, k):
+        eigval, eigvector = symeigLanczos(A, k, extreme="min")
+        ctx.save_for_backward(A, eigval, eigvector)
+        return eigval, eigvector
+    @staticmethod
+    def backward(ctx, grad_eigval, grad_eigvector):
+        from CG_torch import CGSubspace
+        A, eigval, eigvector = ctx.saved_tensors
+        dim = A.shape[0]
+        CG = CGSubspace.apply
+        Aprime = A - eigval * torch.eye(dim, dtype=A.dtype)
+        b = grad_eigvector - torch.matmul(eigvector, grad_eigvector) * eigvector
+        lambda0 = CG(Aprime, b, eigvector)
+
+        grad_A = (grad_eigval * eigvector - lambda0)[:, None] * eigvector
+        grad_k = None
+        return grad_A, grad_k
+
 if __name__ == "__main__":
     import time
     n = 8000
