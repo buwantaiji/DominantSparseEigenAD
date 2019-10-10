@@ -1,6 +1,6 @@
 import torch
 
-def CG(A, b, initialx, sparse=False):
+def CG_torch(A, b, initialx, sparse=False):
     """
         Compute the unique solution x of the system of linear equation Ax = b, 
     using Conjugate Gradient(CG) method and implemented by Pytorch.
@@ -39,6 +39,28 @@ def CG(A, b, initialx, sparse=False):
         d = r + beta * d
         alpha = torch.matmul(r, r) / Amap(d).matmul(d)
     return x
+
+class CG_subspace(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, A, b, alpha0):
+        ctx.dim = b.shape[0]
+        initialx = torch.randn(ctx.dim, dtype=b.dtype)
+        initialx = initialx - torch.matmul(alpha0, initialx) * alpha0
+        x = CG_torch(A, b, initialx)
+        ctx.save_for_backward(alpha0, A, x)
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_x):
+        alpha0, A, x = ctx.saved_tensors
+        initialx = torch.randn(ctx.dim, dtype=x.dtype)
+        initialx = initialx - torch.matmul(alpha0, initialx) * alpha0
+        b = grad_x - torch.matmul(alpha0, grad_x) * alpha0
+
+        grad_b = CG_torch(A, b, initialx)
+        grad_A = - grad_b[:, None] * x
+        grad_alpha0 = - x * torch.matmul(alpha0, grad_x)
+        return grad_A, grad_b, grad_alpha0
 
 if __name__ == "__main__":
     """
