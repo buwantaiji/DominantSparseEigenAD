@@ -48,6 +48,10 @@ class TFIM(object):
         basis = torch.arange(self.dim)[:, None]
         self.flips_basis = basis ^ masks
 
+    def setpHpg(self):
+        self.pHpgmatrix = torch.zeros(self.dim, self.dim).to(torch.float64)
+        self.pHpgmatrix[self.flips_basis.T, torch.arange(self.dim)] = - 1.0
+
     def pHpg(self, v):
         """
             The 1st derivative of the Hamiltonian operator H of the model.
@@ -61,7 +65,7 @@ class TFIM(object):
         """
             Set the Hamiltonian of the model, which is a (Hermitian) square matrix
         represented as a normal torch Tensor.
-            The resulting Hamiltonian matrix is storeed in `self.Hmatrix`.
+            The resulting Hamiltonian matrix is stored in `self.Hmatrix`.
 
         Note: The applicability of this method is limited by Lattice size N. 
             To construct the Hamiltonian for larger N(~> 10, say), use
@@ -73,8 +77,9 @@ class TFIM(object):
 
         # Introduce a small random noise in the Hamiltonian to avoid devide-by-zero
         #   problem when calculating 2nd derivative of E0 using AD of torch.
-        randommatrix = 1e-12 * torch.randn(model.dim, model.dim).to(torch.float64)
+        randommatrix = 1e-12 * torch.randn(self.dim, self.dim).to(torch.float64)
         randommatrix = 0.5 * (randommatrix + randommatrix.T)
+        #randommatrix = torch.zeros(self.dim, self.dim).to(torch.float64)
 
         self.Hmatrix = diagmatrix + offdiagmatrix + randommatrix
 
@@ -112,6 +117,8 @@ class TFIM(object):
                dE0.item() / self.N, \
                d2E0.item() / self.N
 
+    def Hadjoint_to_gadjoint(self, v1, v2):
+        return self.pHpg(v2).matmul(v1)[None]
 
 if __name__ == "__main__":
     from Lanczos_torch import symeigLanczos
