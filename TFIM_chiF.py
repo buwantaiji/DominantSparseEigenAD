@@ -11,6 +11,8 @@ gs = np.linspace(0.3, 1.8, num=Npoints)
 chiFs_perturbation = np.empty(Npoints)
 chiFs_AD = np.empty(Npoints)
 chiFs_sparse_AD = np.empty(Npoints)
+chi3s_AD = np.empty(Npoints)
+chi3s_sparse_AD = np.empty(Npoints)
 for i in range(Npoints):
     model.g = torch.Tensor([gs[i]]).to(torch.float64)
     model.g.requires_grad_(True)
@@ -36,28 +38,37 @@ for i in range(Npoints):
     E0_AD, psi0_AD = dominant_symeig(model.Hmatrix, k)
     logF = torch.log(psi0_AD.detach().matmul(psi0_AD))
     dlogF, = torch.autograd.grad(logF, model.g, create_graph=True)
-    d2logF, = torch.autograd.grad(dlogF, model.g)
+    #d2logF, = torch.autograd.grad(dlogF, model.g)
+    d2logF, = torch.autograd.grad(dlogF, model.g, create_graph=True)
     chiFs_AD[i] = -d2logF.item()
+    d3logF, = torch.autograd.grad(d2logF, model.g)
+    chi3s_AD[i] = -d3logF.item()
     #print("g: ", gs[i], "psi0 * dpsi0: ", torch.matmul(psi0, dpsi0), 
 
-    CG_torch.set_CGsubspace_sparse(model.H, model.Hadjoint_to_gadjoint)
-    Lanczos_torch.set_DominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
+    Lanczos_torch.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
     dominant_sparse_symeig = Lanczos_torch.DominantSparseSymeig.apply
     E0_sparse_AD, psi0_sparse_AD = dominant_sparse_symeig(model.g, k, model.dim)
     logF_sparse = torch.log(psi0_sparse_AD.detach().matmul(psi0_sparse_AD))
     dlogF_sparse, = torch.autograd.grad(logF_sparse, model.g, create_graph=True)
-    d2logF_sparse, = torch.autograd.grad(dlogF_sparse, model.g)
+    #d2logF_sparse, = torch.autograd.grad(dlogF_sparse, model.g)
+    d2logF_sparse, = torch.autograd.grad(dlogF_sparse, model.g, create_graph=True)
     chiFs_sparse_AD[i] = -d2logF_sparse.item()
+    d3logF_sparse, = torch.autograd.grad(d2logF_sparse, model.g)
+    chi3s_sparse_AD[i] = -d3logF_sparse.item()
 
     print("g: ", gs[i], 
             #"chiF_geometric: ", chiF_geometric, 
             "chiF_perturbation: ", chiFs_perturbation[i], 
             "chiF_AD: ", chiFs_AD[i], 
-            "chiF_sparse_AD: ", chiFs_sparse_AD[i])
+            "chiF_sparse_AD: ", chiFs_sparse_AD[i], 
+            "chi3_AD: ", chi3s_AD[i], 
+            "chi3_sparse_AD: ", chi3s_sparse_AD[i])
 import matplotlib.pyplot as plt
 plt.plot(gs, chiFs_perturbation, label="perturbation")
 plt.plot(gs, chiFs_AD, label="AD: normal representation")
 plt.plot(gs, chiFs_sparse_AD, label="AD: sparse representation")
+plt.plot(gs, chi3s_AD, label="3rd derivative AD: normal representation")
+plt.plot(gs, chi3s_sparse_AD, label="3rd derivative AD: sparse representation")
 plt.legend()
 plt.xlabel("$g$")
 plt.ylabel("$\\chi_F$")

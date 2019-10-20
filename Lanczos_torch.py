@@ -103,7 +103,34 @@ def symeigLanczos(A, k, extreme="both", *, sparse=False, dim=None):
     elif extreme == "max":
         return eigvalsQ[-1], eigvectorsQ[:, -1]
 
-def set_DominantSparseSymeig(A, Aadjoint_to_gadjoint):
+class DominantSymeig(torch.autograd.Function):
+    """
+        Function primitive of dominant real symmetric eigensolver, where the matrix
+    is represented in normal form as a torch.Tensor.
+    
+    input: A -- the real symmetric matrix A.
+           k -- number of Lanczos vectors requested.(doesn't need gradient)
+    output: eigval -- the smallest eigenvalue of A.
+            eigvector -- corresponding (non-degenerate) eigenvector.
+    """ 
+    @staticmethod
+    def forward(ctx, A, k):
+        eigval, eigvector = symeigLanczos(A, k, extreme="min")
+        ctx.save_for_backward(A, eigval, eigvector)
+        return eigval, eigvector
+    @staticmethod
+    def backward(ctx, grad_eigval, grad_eigvector):
+        from CG_torch import CGSubspace
+        A, eigval, eigvector = ctx.saved_tensors
+        Aprime = A - eigval * torch.eye(A.shape[0], dtype=A.dtype)
+        CG = CGSubspace.apply
+        b = grad_eigvector - torch.matmul(eigvector, grad_eigvector) * eigvector
+        lambda0 = CG(Aprime, b, eigvector)
+        grad_A = (grad_eigval * eigvector - lambda0)[:, None] * eigvector
+        grad_k = None
+        return grad_A, grad_k
+
+def setDominantSparseSymeig(A, Aadjoint_to_gadjoint):
     """
         Function primitive of dominant real symmetric eigensolver of a "sparse" matrix
     represented as a function.
@@ -136,6 +163,9 @@ def set_DominantSparseSymeig(A, Aadjoint_to_gadjoint):
             User may do whatever he want to get the adjoint of g using these
         two vectors.
     """
+    global DominantSparseSymeig 
+    import CG_torch
+    CG_torch.setCGSubspaceSparse(A, Aadjoint_to_gadjoint)
     @staticmethod
     def forward(ctx, g, k, dim):
         eigval, eigvector = symeigLanczos(A, k, extreme="min", sparse=True, dim=dim)
@@ -143,8 +173,7 @@ def set_DominantSparseSymeig(A, Aadjoint_to_gadjoint):
         return eigval, eigvector
     @staticmethod
     def backward(ctx, grad_eigval, grad_eigvector):
-        from CG_torch import CGSubspaceSparse
-        CG = CGSubspaceSparse.apply
+        CG = CG_torch.CGSubspaceSparse.apply
         g, eigval, eigvector = ctx.saved_tensors
         b = grad_eigvector - torch.matmul(eigvector, grad_eigvector) * eigvector
         lambda0 = CG(g, eigval, b, eigvector)
@@ -153,36 +182,8 @@ def set_DominantSparseSymeig(A, Aadjoint_to_gadjoint):
         grad_g = Aadjoint_to_gadjoint(v1, v2)
         grad_k = grad_dim = None
         return grad_g, grad_k, grad_dim
-    global DominantSparseSymeig 
     DominantSparseSymeig = type("DominantSparseSymeig", (torch.autograd.Function, ), 
             {"forward": forward, "backward": backward})
-
-class DominantSymeig(torch.autograd.Function):
-    """
-        Function primitive of dominant real symmetric eigensolver, where the matrix
-    is represented in normal form as a torch.Tensor.
-    
-    input: A -- the real symmetric matrix A.
-           k -- number of Lanczos vectors requested.(doesn't need gradient)
-    output: eigval -- the smallest eigenvalue of A.
-            eigvector -- corresponding (non-degenerate) eigenvector.
-    """ 
-    @staticmethod
-    def forward(ctx, A, k):
-        eigval, eigvector = symeigLanczos(A, k, extreme="min")
-        ctx.save_for_backward(A, eigval, eigvector)
-        return eigval, eigvector
-    @staticmethod
-    def backward(ctx, grad_eigval, grad_eigvector):
-        from CG_torch import CGSubspace
-        A, eigval, eigvector = ctx.saved_tensors
-        Aprime = A - eigval * torch.eye(A.shape[0], dtype=A.dtype)
-        CG = CGSubspace.apply
-        b = grad_eigvector - torch.matmul(eigvector, grad_eigvector) * eigvector
-        lambda0 = CG(Aprime, b, eigvector)
-        grad_A = (grad_eigval * eigvector - lambda0)[:, None] * eigvector
-        grad_k = None
-        return grad_A, grad_k
 
 if __name__ == "__main__":
     import time

@@ -40,26 +40,37 @@ def CG_torch(A, b, initialx, sparse=False):
         alpha = torch.matmul(r, r) / Amap(d).matmul(d)
     return x
 
-def CGsubspace_forward(A, b, alpha, sparse=False):
-    initialx = torch.randn(b.shape[0], dtype=b.dtype)
-    initialx = initialx - torch.matmul(alpha, initialx) * alpha
-    x = CG_torch(A, b, initialx, sparse=sparse)
-    return x
+class CGSubspace(torch.autograd.Function):
+    """
+        Function primitive of low-rank CG linear system solver, where the matrix is
+    represented in normal form as a torch.Tensor.
 
-def CGsubspace_backward(A, alpha, x, grad_x, sparse=False):
-    initialx = torch.randn(x.shape[0], dtype=x.dtype)
-    initialx = initialx - torch.matmul(alpha, initialx) * alpha
-    b = grad_x - torch.matmul(alpha, grad_x) * alpha
+    input: A, b, alpha, where A is a N-dimensional real symmetric
+        matrix of rank N - 1, and alpha is the unique eigenvector of A of eigenvalue
+        zero.(The other eigenvalues of A are all greater than zero.)
+    output: the unique solution x of the low-rank linear system Ax = b in addition to
+        the condition alpha^T x = 0.
 
-    grad_b = CG_torch(A, b, initialx, sparse=sparse)
-    if sparse:
-        grad_A = - grad_b, x
-    else:
+    For details, c.f. https://buwantaiji.github.io/2019/10/CG-backward/
+    """
+    @staticmethod
+    def forward(ctx, A, b, alpha):
+        initialx = torch.randn(b.shape[0], dtype=b.dtype)
+        initialx = initialx - torch.matmul(alpha, initialx) * alpha
+        x = CG_torch(A, b, initialx)
+        ctx.save_for_backward(A, alpha, x)
+        return x
+    @staticmethod
+    def backward(ctx, grad_x):
+        A, alpha, x = ctx.saved_tensors
+        CG = CGSubspace.apply
+        b = grad_x - torch.matmul(alpha, grad_x) * alpha
+        grad_b = CG(A, b, alpha)
         grad_A = - grad_b[:, None] * x
-    grad_alpha = - x * torch.matmul(alpha, grad_x)
-    return grad_A, grad_b, grad_alpha
+        grad_alpha = - x * torch.matmul(alpha, grad_x)
+        return grad_A, grad_b, grad_alpha
 
-def set_CGsubspace_sparse(H, Hadjoint_to_gadjoint):
+def setCGSubspaceSparse(A, Aadjoint_to_gadjoint):
     """
         Function primitive of low-rank CG linear system solver, where the matrix is
     "sparse" and represented as a function.
@@ -71,16 +82,16 @@ def set_CGsubspace_sparse(H, Hadjoint_to_gadjoint):
         In particular, this wrapped version is mainly used to make the back-propagation
     of the dominant sparse eigensolver primitive -- i.e., DominantSparseSymeig -- work
     properly. The computation graph is schematically shown below.
-            -----------------
-    g     --|--> A          |
-            |     \         |
-            |      A-E_0I --|--
-            |     /         |  \ 
-    E_0   --|-->--          |  |||--> x  
-            |               |  / /
-    b     --|------->-------|-- /
-    alpha --|------->-------|---
-            -----------------
+            ----------------------
+    g     --|--> A               | 
+            |     \              | 
+            |      A-E_0I --     |
+            |     /         \    |
+    E_0   --|-->--          |||--|--> x  
+            |               / /  |
+    b     --|------->------- /   |
+    alpha --|------->--------    |
+            ----------------------
     input: g -- The parameter(s) of interest of the matrix A, whose gradients are requested.
                 In current version, g must be a torch.Tensor of arbitrary shape.
            E0, alpha are the smallest eigvalue and corresponding (non-degenerate)
@@ -101,50 +112,30 @@ def set_CGsubspace_sparse(H, Hadjoint_to_gadjoint):
             User may do whatever he want to get the adjoint of g using these
         two vectors.
     """
+    global CGSubspaceSparse 
     @staticmethod
     def forward(ctx, g, E0, b, alpha):
-        A = lambda v: H(v) - E0 * v
-        x = CGsubspace_forward(A, b, alpha, sparse=True)
-        ctx.A = A
-        ctx.save_for_backward(alpha, x)
+        Aprime = lambda v: A(v) - E0 * v
+        initialx = torch.randn(b.shape[0], dtype=b.dtype)
+        initialx = initialx - torch.matmul(alpha, initialx) * alpha
+        x = CG_torch(Aprime, b, initialx, sparse=True)
+        ctx.g = g
+        ctx.save_for_backward(E0, alpha, x)
         return x
     @staticmethod
     def backward(ctx, grad_x):
-        A = ctx.A
-        alpha, x = ctx.saved_tensors
-        grad_A, grad_b, grad_alpha = CGsubspace_backward(A, alpha, x, grad_x, sparse=True)
-        v1, v2 = grad_A
+        g = ctx.g
+        E0, alpha, x = ctx.saved_tensors
+        CG = CGSubspaceSparse.apply
+        b = grad_x - torch.matmul(alpha, grad_x) * alpha
+        grad_b = CG(g, E0, b, alpha)
+        v1, v2 = - grad_b, x
+        grad_alpha = - x * torch.matmul(alpha, grad_x)
         grad_E0 = - torch.matmul(v1, v2)
-        grad_g = Hadjoint_to_gadjoint(v1, v2)
+        grad_g = Aadjoint_to_gadjoint(v1, v2)
         return grad_g, grad_E0, grad_b, grad_alpha
-    global CGSubspaceSparse 
     CGSubspaceSparse = type("CGSubspaceSparse", (torch.autograd.Function, ), 
             {"forward": forward, "backward": backward})
-
-
-class CGSubspace(torch.autograd.Function):
-    """
-        Function primitive of low-rank CG linear system solver, where the matrix is
-    represented in normal form as a torch.Tensor.
-
-    input: A, b, alpha, where A is a N-dimensional positive definite real symmetric
-        matrix of rank N - 1, and alpha is the unique eigenvector of A of eigenvalue
-        zero.(The other eigenvalues of A are all greater than zero.)
-    output: the unique solution x of the low-rank linear system Ax = b in addition to
-        the condition alpha^T x = 0.
-
-    For details, c.f. https://buwantaiji.github.io/2019/10/CG-backward/
-    """
-    @staticmethod
-    def forward(ctx, A, b, alpha):
-        x = CGsubspace_forward(A, b, alpha)
-        ctx.save_for_backward(A, alpha, x)
-        return x
-
-    @staticmethod
-    def backward(ctx, grad_x):
-        A, alpha, x = ctx.saved_tensors
-        return CGsubspace_backward(A, alpha, x, grad_x)
 
 if __name__ == "__main__":
     """
