@@ -83,112 +83,14 @@ class TFIM(object):
 
         self.Hmatrix = diagmatrix + offdiagmatrix + randommatrix
 
-    def E0_derivatives_AD_torch(self):
-        Es, psis = torch.symeig(self.Hmatrix, eigenvectors=True)
-        E0 = Es[0]
-        dE0, = torch.autograd.grad(E0, model.g, create_graph=True)
-        d2E0, = torch.autograd.grad(dE0, model.g)
-        return E0.detach().item() / model.N, \
-               dE0.detach().item() / model.N, \
-               d2E0.detach().item() / model.N
-
     def H(self, v):
         """
             The Hamiltonian of the model, which is a "sparse" linear tranformation
         that takes a vector as input and returns another vector as output.
         """
         resultv = v * self.diag_elements \
-                  - self.g.detach() * v[self.flips_basis].sum(dim=1)
+                  - self.g * v[self.flips_basis].sum(dim=1)
         return resultv
-
-    def E0_derivatives_AD_Lanczos(self, k):
-        E0, psi0 = symeigLanczos(self.H, k, extreme="min", sparse=True, dim=self.dim)
-        dE0 = self.pHpg(psi0).matmul(psi0) 
-
-        A = lambda v: self.H(v) - E0 * v
-        b = 2 * self.pHpg(psi0)
-        b = b - torch.matmul(psi0, b) * psi0
-        initialx = torch.randn(self.dim, dtype=b.dtype)
-        initialx = initialx - torch.matmul(psi0, initialx) * psi0
-        lambda0 = CG(A, b, initialx, sparse=True)
-        d2E0 = - self.pHpg(psi0).matmul(lambda0) 
-
-        return E0.item() / self.N, \
-               dE0.item() / self.N, \
-               d2E0.item() / self.N
 
     def Hadjoint_to_gadjoint(self, v1, v2):
         return self.pHpg(v2).matmul(v1)[None]
-
-if __name__ == "__main__":
-    from Lanczos_torch import symeigLanczos
-    from CG_torch import CG
-    import matplotlib.pyplot as plt
-
-    N = 10
-    model = TFIM(N)
-    k = 300
-    Npoints = 100
-    gs = np.linspace(1e-6, 2.0, num=Npoints)
-    E0s_per_N_analytic = np.empty(Npoints)
-    E0s_per_N_AD_torch = np.empty(Npoints)
-    E0s_per_N_AD_Lanczos = np.empty(Npoints)
-    pE0s_per_N_pg_analytic = np.empty(Npoints)
-    pE0s_per_N_pg_AD_torch = np.empty(Npoints)
-    pE0s_per_N_pg_AD_Lanczos = np.empty(Npoints)
-    p2E0s_per_N_pg2_analytic = np.empty(Npoints)
-    p2E0s_per_N_pg2_AD_torch = np.empty(Npoints)
-    p2E0s_per_N_pg2_AD_Lanczos = np.empty(Npoints)
-
-    print("g    E0_analytic    E0_AD_torch    E0_AD_Lanczos    "\
-          "pE0pg_analytic    pE0pg_AD_torch    pE0pg_AD_Lanczos    "\
-          "p2E0pg2_analytic    p2E0pg2_AD_torch    p2E0pg2_AD_Lanczos")
-    for i in range(Npoints):
-        model.g = torch.Tensor([gs[i]]).to(torch.float64)
-        model.g.requires_grad_(True)
-
-        E0s_per_N_analytic[i], pE0s_per_N_pg_analytic[i], p2E0s_per_N_pg2_analytic[i] \
-                = model.analytic_results()
-
-        model.setHmatrix()
-        E0s_per_N_AD_torch[i], pE0s_per_N_pg_AD_torch[i], p2E0s_per_N_pg2_AD_torch[i] \
-                = model.E0_derivatives_AD_torch()
-
-        E0s_per_N_AD_Lanczos[i], pE0s_per_N_pg_AD_Lanczos[i], p2E0s_per_N_pg2_AD_Lanczos[i] \
-                = model.E0_derivatives_AD_Lanczos(k)
-
-
-        print(gs[i], E0s_per_N_analytic[i], E0s_per_N_AD_torch[i], E0s_per_N_AD_Lanczos[i],
-              pE0s_per_N_pg_analytic[i], pE0s_per_N_pg_AD_torch[i], pE0s_per_N_pg_AD_Lanczos[i],
-              p2E0s_per_N_pg2_analytic[i], p2E0s_per_N_pg2_AD_torch[i], p2E0s_per_N_pg2_AD_Lanczos[i])
-
-    plt.plot(gs, E0s_per_N_analytic, label="Analytic result")
-    plt.plot(gs, E0s_per_N_AD_torch, label="AD: torch")
-    plt.plot(gs, E0s_per_N_AD_Lanczos, label="AD: Lanczos")
-    plt.legend()
-    plt.xlabel("$g$")
-    plt.ylabel("$\\frac{E_0}{N}$")
-    plt.title("Ground state energy per site of 1D TFIM\n" \
-            "$H = - \\sum_{i=0}^{N-1} (g\\sigma_i^x + \\sigma_i^z \\sigma_{i+1}^z)$\n" \
-            "$N=%d$" % model.N)
-    plt.show()
-    plt.plot(gs, pE0s_per_N_pg_analytic, label="Analytic result")
-    plt.plot(gs, pE0s_per_N_pg_AD_torch, label="AD: torch")
-    plt.plot(gs, pE0s_per_N_pg_AD_Lanczos, label="AD: Lanczos")
-    plt.legend()
-    plt.xlabel("$g$")
-    plt.ylabel("$\\frac{1}{N} \\frac{\\partial E_0}{\\partial g}$")
-    plt.title("1st derivative w.r.t. $g$ of ground state energy per site of 1D TFIM\n" \
-            "$H = - \\sum_{i=0}^{N-1} (g\\sigma_i^x + \\sigma_i^z \\sigma_{i+1}^z)$\n" \
-            "$N=%d$" % model.N)
-    plt.show()
-    plt.plot(gs, p2E0s_per_N_pg2_analytic, label="Analytic result")
-    plt.plot(gs, p2E0s_per_N_pg2_AD_torch, label="AD: torch")
-    plt.plot(gs, p2E0s_per_N_pg2_AD_Lanczos, label="AD: Lanczos")
-    plt.legend()
-    plt.xlabel("$g$")
-    plt.ylabel("$\\frac{1}{N} \\frac{\\partial^2 E_0}{\\partial g^2}$")
-    plt.title("2nd derivative w.r.t. $g$ of ground state energy per site of 1D TFIM\n" \
-            "$H = - \\sum_{i=0}^{N-1} (g\\sigma_i^x + \\sigma_i^z \\sigma_{i+1}^z)$\n" \
-            "$N=%d$" % model.N)
-    plt.show()

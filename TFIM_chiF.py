@@ -1,78 +1,107 @@
+"""
+    Several different approaches of computing the fidelity susceptibility chi_F(g)
+of 1D TFIM.
+"""
 import numpy as np
 import torch
 from TFIM import TFIM
-import Lanczos_torch
-import CG_torch
 
-N = 10
-model = TFIM(N)
-Npoints = 100
-gs = np.linspace(0.3, 1.8, num=Npoints)
-chiFs_perturbation = np.empty(Npoints)
-chiFs_AD = np.empty(Npoints)
-chiFs_sparse_AD = np.empty(Npoints)
-chi3s_AD = np.empty(Npoints)
-chi3s_sparse_AD = np.empty(Npoints)
-for i in range(Npoints):
-    model.g = torch.Tensor([gs[i]]).to(torch.float64)
-    model.g.requires_grad_(True)
-
-    model.setHmatrix()
+def chiF_perturbation(model):
+    """
+        Compute chi_F using the full spectrum perturbation formula:
+    chi_F = \sum_{n \neq 0} \frac{ |<psi_n(g)| \partial H / \partial g |psi_0(g)>|^2 }
+                                 {(E_0(g) - E_n(g))^2}
+    """
     Es, psis = torch.symeig(model.Hmatrix, eigenvectors=True)
     psi0 = psis[:, 0]
-    """
-    dpsi0 = torch.empty(model.dim, dtype=torch.float64)
-    I = torch.eye(model.dim, dtype=torch.float64)
-    for idx in range(model.dim):
-        dpsi0[idx], = torch.autograd.grad(psi0[idx], model.g, retain_graph=True)
-    chiF_geometric = torch.matmul(dpsi0, dpsi0).item()
-    """
 
     model.setpHpg()
     numerators = psi0.matmul(model.pHpgmatrix).matmul(psis)[1:] ** 2
     denominators = (Es[0] - Es[1:]) ** 2
-    chiFs_perturbation[i] = (numerators / denominators).sum().item()
+    chiF = (numerators / denominators).sum().item()
+    return chiF
 
-    dominant_symeig = Lanczos_torch.DominantSymeig.apply
-    k = 300
-    E0_AD, psi0_AD = dominant_symeig(model.Hmatrix, k)
-    logF = torch.log(psi0_AD.detach().matmul(psi0_AD))
+def chiF_matrixAD(model, k):
+    """
+        Compute chi_F using the DominantSymeig primitive, where the matrix to be
+    diagonalized is represented as the normal form of a torch.Tensor.
+    """
+    from Lanczos_torch import DominantSymeig
+    dominant_symeig = DominantSymeig.apply
+    E0, psi0 = dominant_symeig(model.Hmatrix, k)
+    logF = torch.log(psi0.detach().matmul(psi0))
     dlogF, = torch.autograd.grad(logF, model.g, create_graph=True)
-    #d2logF, = torch.autograd.grad(dlogF, model.g)
-    d2logF, = torch.autograd.grad(dlogF, model.g, create_graph=True)
-    chiFs_AD[i] = -d2logF.item()
-    d3logF, = torch.autograd.grad(d2logF, model.g)
-    chi3s_AD[i] = -d3logF.item()
-    #print("g: ", gs[i], "psi0 * dpsi0: ", torch.matmul(psi0, dpsi0), 
+    d2logF, = torch.autograd.grad(dlogF, model.g)
+    chiF = -d2logF.item()
+    return chiF
 
+def chiF_sparseAD(model, k):
+    """
+        Compute chi_F using the DominantSparseSymeig primitive, where the matrix 
+    to be diagonalized is "sparse" and represented as a function.
+    """
+    import Lanczos_torch
     Lanczos_torch.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
     dominant_sparse_symeig = Lanczos_torch.DominantSparseSymeig.apply
-    E0_sparse_AD, psi0_sparse_AD = dominant_sparse_symeig(model.g, k, model.dim)
-    logF_sparse = torch.log(psi0_sparse_AD.detach().matmul(psi0_sparse_AD))
-    dlogF_sparse, = torch.autograd.grad(logF_sparse, model.g, create_graph=True)
-    #d2logF_sparse, = torch.autograd.grad(dlogF_sparse, model.g)
-    d2logF_sparse, = torch.autograd.grad(dlogF_sparse, model.g, create_graph=True)
-    chiFs_sparse_AD[i] = -d2logF_sparse.item()
-    d3logF_sparse, = torch.autograd.grad(d2logF_sparse, model.g)
-    chi3s_sparse_AD[i] = -d3logF_sparse.item()
+    E0, psi0 = dominant_sparse_symeig(model.g, k, model.dim)
+    logF = torch.log(psi0.detach().matmul(psi0))
+    dlogF, = torch.autograd.grad(logF, model.g, create_graph=True)
+    d2logF, = torch.autograd.grad(dlogF, model.g)
+    chiF = -d2logF.item()
+    return E0, psi0, chiF
 
-    print("g: ", gs[i], 
-            #"chiF_geometric: ", chiF_geometric, 
-            "chiF_perturbation: ", chiFs_perturbation[i], 
-            "chiF_AD: ", chiFs_AD[i], 
-            "chiF_sparse_AD: ", chiFs_sparse_AD[i], 
-            "chi3_AD: ", chi3s_AD[i], 
-            "chi3_sparse_AD: ", chi3s_sparse_AD[i])
-import matplotlib.pyplot as plt
-plt.plot(gs, chiFs_perturbation, label="perturbation")
-plt.plot(gs, chiFs_AD, label="AD: normal representation")
-plt.plot(gs, chiFs_sparse_AD, label="AD: sparse representation")
-plt.plot(gs, chi3s_AD, label="3rd derivative AD: normal representation")
-plt.plot(gs, chi3s_sparse_AD, label="3rd derivative AD: sparse representation")
-plt.legend()
-plt.xlabel("$g$")
-plt.ylabel("$\\chi_F$")
-plt.title("Fidelity susceptibility of 1D TFIM\n" \
-        "$H = - \\sum_{i=0}^{N-1} (g\\sigma_i^x + \\sigma_i^z \\sigma_{i+1}^z)$\n" \
-        "$N=%d$" % model.N)
-plt.show()
+def chiF_geometric(model, E0, psi0):
+    import CG_torch
+    """
+        Compute chi_F using the "geometric" formula:
+    chi_F = <\partial psi_0(g) / \partial g | \partial psi_0(g) / \partial g>
+        The 1st derivative |\partial psi_0(g) / \partial g> is computed by manually
+    implementing a forward AD process.
+    """
+    b = -model.pHpg(psi0)
+    b = b - torch.matmul(psi0, b) * psi0
+    CG = CG_torch.CGSubspaceSparse.apply
+    dpsi0 = CG(model.g, E0, b, psi0)
+    chiF = torch.matmul(dpsi0, dpsi0).item()
+    return chiF
+
+if __name__ == "__main__":
+    N = 10
+    model = TFIM(N)
+    k = 300
+    Npoints = 100
+    gs = np.linspace(0.45, 1.6, num=Npoints)
+    chiFs_perturbation = np.empty(Npoints)
+    chiFs_matrixAD = np.empty(Npoints)
+    chiFs_sparseAD = np.empty(Npoints)
+    chiFs_geometric = np.empty(Npoints)
+    for i in range(Npoints):
+        model.g = torch.Tensor([gs[i]]).to(torch.float64)
+        model.g.requires_grad_(True)
+
+        model.setHmatrix()
+        chiFs_perturbation[i] = chiF_perturbation(model)
+
+        chiFs_matrixAD[i] = chiF_matrixAD(model, k)
+
+        E0, psi0, chiFs_sparseAD[i] = chiF_sparseAD(model, k)
+
+        chiFs_geometric[i] = chiF_geometric(model, E0, psi0)
+
+        print("g: ", gs[i], 
+                "chiF_perturbation: ", chiFs_perturbation[i], 
+                "chiF_matrixAD: ", chiFs_matrixAD[i], 
+                "chiF_sparseAD: ", chiFs_sparseAD[i], 
+                "chiF_geometric: ", chiFs_geometric[i])
+    import matplotlib.pyplot as plt
+    plt.plot(gs, chiFs_perturbation, label="perturbation")
+    plt.plot(gs, chiFs_matrixAD, label="AD: normal representation")
+    plt.plot(gs, chiFs_sparseAD, label="AD: sparse representation")
+    plt.plot(gs, chiFs_geometric, label="Forward AD")
+    plt.legend()
+    plt.xlabel("$g$")
+    plt.ylabel("$\\chi_F$")
+    plt.title("Fidelity susceptibility of 1D TFIM\n" \
+            "$H = - \\sum_{i=0}^{N-1} (g\\sigma_i^x + \\sigma_i^z \\sigma_{i+1}^z)$\n" \
+            "$N=%d$" % model.N)
+    plt.show()
