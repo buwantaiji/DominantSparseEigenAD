@@ -1,5 +1,5 @@
 import torch
-from ..CG import CG_torch, CGSubspace
+from DominantSparseEigenAD.CG import CG_torch, CGSubspace
 
 def test_fullrank():
     import numpy as np
@@ -21,7 +21,7 @@ def test_fullrank():
     assert torch.allclose(x, groundtruth)
 
 def test_lowrank():
-    n = 100
+    n = 300
     A = torch.randn(n, n, dtype=torch.float64)
     A = A + A.T
     eigvalues, eigvectors = torch.symeig(A, eigenvectors=True)

@@ -2,14 +2,6 @@
     Several different approaches of computing the fidelity susceptibility chi_F(g)
 of 1D TFIM.
 """
-
-"""
-    These statements are needed only when the package is not permanently installed
-in user's system.
-"""
-import sys
-sys.path.append("../")
-
 import numpy as np
 import torch
 from TFIM import TFIM

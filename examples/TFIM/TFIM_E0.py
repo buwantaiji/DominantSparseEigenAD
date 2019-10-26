@@ -2,14 +2,6 @@
     Several different approaches of computing various order of derivatives of the 
 ground state energy per site of 1D TFIM.
 """
-
-"""
-    These statements are needed only when the package is not permanently installed
-in user's operating system.
-"""
-import sys
-sys.path.append("../../")
-
 import numpy as np
 import torch
 from TFIM import TFIM

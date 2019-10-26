@@ -4,14 +4,6 @@ of 1D TFIM.
     For details and discussions about the fidelity susceptibility, c.f. 
 https://journals.aps.org/prx/pdf/10.1103/PhysRevX.5.031007.
 """
-
-"""
-    These statements are needed only when the package is not permanently installed
-in user's operating system.
-"""
-import sys
-sys.path.append("../../")
-
 import numpy as np
 import torch
 from TFIM import TFIM
