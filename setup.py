@@ -11,7 +11,7 @@ setuptools.setup(
     description="Backward AD of dominant sparse eigensolver using Pytorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    keywords=" automatic differentiation dominant eigensolver Pytorch",
+    keywords="automatic differentiation dominant eigensolver Pytorch",
     url="https://github.com/buwantaiji/DominantSparseEigenAD",
     packages=["DominantSparseEigenAD"],
     install_requires=[
