@@ -1,5 +1,7 @@
 # DominantSparseEigenAD
 
+[![Build Status](https://travis-ci.com/buwantaiji/DominantSparseEigenAD.svg?branch=master)](https://travis-ci.com/buwantaiji/DominantSparseEigenAD)
+
 DominantSparseEigenAD is an extension of Pytorch that handles backward automatic differentiation of dominant eigen-decomposition. 
 
 
