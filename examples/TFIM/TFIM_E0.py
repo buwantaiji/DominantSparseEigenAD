@@ -12,8 +12,8 @@ def E0_analytic(model):
     Jordan-Wigner transformation. The various order derivatives of it are then
     computed by AD.
     """
-    ks = torch.linspace(-(model.N-1)/2, (model.N-1)/2, steps=model.N, dtype=torch.float64) \
-                / model.N * 2 * np.pi
+    ks = torch.linspace(-(model.N-1)/2, (model.N-1)/2, steps=model.N, 
+            device=model.device, dtype=torch.float64) / model.N * 2 * np.pi
     epsilon_ks = 2 * torch.sqrt(model.g**2 - 2 * model.g * torch.cos(ks) + 1)
     E0 = - 0.5 * epsilon_ks.sum()
     dE0, = torch.autograd.grad(E0, model.g, create_graph=True)
@@ -43,7 +43,7 @@ def E0_matrixAD(model, k):
     """
     from DominantSparseEigenAD.Lanczos import DominantSymeig
     dominant_symeig = DominantSymeig.apply
-    E0, psi0 = dominant_symeig(model.Hmatrix, k)
+    E0, psi0 = dominant_symeig(model.Hmatrix, k, model.device)
     dE0, = torch.autograd.grad(E0, model.g, create_graph=True)
     d2E0, = torch.autograd.grad(dE0, model.g)
     return E0.item() / model.N, \
@@ -59,7 +59,7 @@ def E0_sparseAD(model, k):
     import DominantSparseEigenAD.Lanczos as lanczos
     lanczos.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
     dominant_sparse_symeig = lanczos.DominantSparseSymeig.apply
-    E0, psi0 = dominant_sparse_symeig(model.g, k, model.dim)
+    E0, psi0 = dominant_sparse_symeig(model.g, k, model.dim, model.device)
     dE0, = torch.autograd.grad(E0, model.g, create_graph=True)
     d2E0, = torch.autograd.grad(dE0, model.g)
     return E0.item() / model.N, \
@@ -68,10 +68,11 @@ def E0_sparseAD(model, k):
 
 if __name__ == "__main__":
     N = 10
-    model = TFIM(N)
+    device = torch.device("cpu")
+    model = TFIM(N, device)
     k = 300
     Npoints = 100
-    gs = np.linspace(0.45, 1.6, num=Npoints)
+    gs = np.linspace(0.5, 1.5, num=Npoints)
     E0s_analytic = np.empty(Npoints)
     E0s_torchAD = np.empty(Npoints)
     E0s_matrixAD = np.empty(Npoints)
@@ -91,7 +92,7 @@ if __name__ == "__main__":
           "dE0_analytic    dE0_torchAD    dE0_matrixAD    dE0_sparseAD    "\
           "d2E0_analytic    d2E0_torchAD    d2E0_matrixAD    d2E0_sparseAD")
     for i in range(Npoints):
-        model.g = torch.Tensor([gs[i]]).to(torch.float64)
+        model.g = torch.Tensor([gs[i]]).to(model.device, dtype=torch.float64)
         model.g.requires_grad_(True)
 
         E0s_analytic[i], dE0s_analytic[i], d2E0s_analytic[i] = E0_analytic(model)
@@ -106,6 +107,10 @@ if __name__ == "__main__":
         print(gs[i], E0s_analytic[i], E0s_torchAD[i], E0s_matrixAD[i], E0s_sparseAD[i],
               dE0s_analytic[i], dE0s_torchAD[i], dE0s_matrixAD[i], dE0s_sparseAD[i],
               d2E0s_analytic[i], d2E0s_torchAD[i], d2E0s_matrixAD[i], d2E0s_sparseAD[i])
+
+    #filename = "datas/E0_N_%d.npz" % model.N
+    #np.savez(filename, gs=gs, E0s=E0s_sparseAD, 
+            #dE0s=dE0s_sparseAD, d2E0s=d2E0s_sparseAD)
 
     import matplotlib.pyplot as plt
     plt.plot(gs, E0s_analytic, label="Analytic result")

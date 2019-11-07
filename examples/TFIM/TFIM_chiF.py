@@ -30,7 +30,7 @@ def chiF_matrixAD(model, k):
     """
     from DominantSparseEigenAD.Lanczos import DominantSymeig
     dominant_symeig = DominantSymeig.apply
-    E0, psi0 = dominant_symeig(model.Hmatrix, k)
+    E0, psi0 = dominant_symeig(model.Hmatrix, k, model.device)
     logF = torch.log(psi0.detach().matmul(psi0))
     dlogF, = torch.autograd.grad(logF, model.g, create_graph=True)
     d2logF, = torch.autograd.grad(dlogF, model.g)
@@ -45,7 +45,7 @@ def chiF_sparseAD(model, k):
     import DominantSparseEigenAD.Lanczos as lanczos
     lanczos.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
     dominant_sparse_symeig = lanczos.DominantSparseSymeig.apply
-    E0, psi0 = dominant_sparse_symeig(model.g, k, model.dim)
+    E0, psi0 = dominant_sparse_symeig(model.g, k, model.dim, model.device)
     logF = torch.log(psi0.detach().matmul(psi0))
     dlogF, = torch.autograd.grad(logF, model.g, create_graph=True)
     d2logF, = torch.autograd.grad(dlogF, model.g)
@@ -54,15 +54,16 @@ def chiF_sparseAD(model, k):
 
 if __name__ == "__main__":
     N = 10
-    model = TFIM(N)
+    device = torch.device("cpu")
+    model = TFIM(N, device)
     k = 300
     Npoints = 100
-    gs = np.linspace(0.45, 1.6, num=Npoints)
+    gs = np.linspace(0.5, 1.5, num=Npoints)
     chiFs_perturbation = np.empty(Npoints)
     chiFs_matrixAD = np.empty(Npoints)
     chiFs_sparseAD = np.empty(Npoints)
     for i in range(Npoints):
-        model.g = torch.Tensor([gs[i]]).to(torch.float64)
+        model.g = torch.Tensor([gs[i]]).to(model.device, dtype=torch.float64)
         model.g.requires_grad_(True)
 
         model.setHmatrix()
@@ -76,6 +77,9 @@ if __name__ == "__main__":
                 "chiF_perturbation: ", chiFs_perturbation[i], 
                 "chiF_matrixAD: ", chiFs_matrixAD[i], 
                 "chiF_sparseAD: ", chiFs_sparseAD[i])
+
+    #filename = "datas/chiF_N_%d.npz" % model.N
+    #np.savez(filename, gs=gs, chiFs=chiFs_sparseAD)
 
     import matplotlib.pyplot as plt
     plt.plot(gs, chiFs_perturbation, label="perturbation")

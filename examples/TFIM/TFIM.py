@@ -6,10 +6,11 @@ class TFIM(object):
         Direct diagonalization solver of 1D Transverse Field Ising Model(TFIM).
     H = - \sum_{i=0}^{N-1} (g\sigma_i^x + \sigma_i^z \sigma_{i+1}^z)
     """
-    def __init__(self, N):
+    def __init__(self, N, device=torch.device("cpu")):
         self.N = N
         self.dim = 2**N
         print("Lattice size N = %d" % self.N)
+        self.device = device
         self._diags()
         self._flips_basis()
         print("Model initialization completed.")
@@ -41,16 +42,18 @@ class TFIM(object):
         spins = 1 - 2 * bin_reps
         spins_prime = np.hstack( (spins[:, 1:], spins[:, 0:1]) )
         self.diag_elements = - (spins * spins_prime).sum(axis=1)
-        self.diag_elements = torch.from_numpy(self.diag_elements).to(torch.float64)
+        self.diag_elements = torch.from_numpy(self.diag_elements).to(self.device, 
+                dtype=torch.float64)
 
     def _flips_basis(self):
-        masks = torch.Tensor([1 << i for i in range(self.N)]).long()
-        basis = torch.arange(self.dim)[:, None]
+        masks = torch.Tensor([1 << i for i in range(self.N)]).to(self.device).long()
+        basis = torch.arange(self.dim).to(self.device)[:, None]
         self.flips_basis = basis ^ masks
 
     def setpHpg(self):
-        self.pHpgmatrix = torch.zeros(self.dim, self.dim).to(torch.float64)
-        self.pHpgmatrix[self.flips_basis.T, torch.arange(self.dim)] = - 1.0
+        self.pHpgmatrix = torch.zeros(self.dim, self.dim).to(self.device, 
+                dtype=torch.float64)
+        self.pHpgmatrix[self.flips_basis.T, torch.arange(self.dim).to(self.device)] = - 1.0
 
     def pHpg(self, v):
         """
@@ -72,12 +75,14 @@ class TFIM(object):
             the method `H` below.
         """
         diagmatrix = torch.diag(self.diag_elements)
-        offdiagmatrix = torch.zeros(self.dim, self.dim).to(torch.float64)
-        offdiagmatrix[self.flips_basis.T, torch.arange(self.dim)] = - self.g
+        offdiagmatrix = torch.zeros(self.dim, self.dim).to(self.device, 
+                dtype=torch.float64)
+        offdiagmatrix[self.flips_basis.T, torch.arange(self.dim).to(self.device)] = - self.g
 
         # Introduce a small random noise in the Hamiltonian to avoid devide-by-zero
         #   problem when calculating 2nd derivative of E0 using AD of torch.
-        randommatrix = 1e-12 * torch.randn(self.dim, self.dim).to(torch.float64)
+        randommatrix = 1e-12 * torch.randn(self.dim, self.dim).to(self.device, 
+                dtype=torch.float64)
         randommatrix = 0.5 * (randommatrix + randommatrix.T)
         #randommatrix = torch.zeros(self.dim, self.dim).to(torch.float64)
 

@@ -4,23 +4,69 @@ from DominantSparseEigenAD.Lanczos import symeigLanczos, DominantSymeig
 
 def test_normal():
     n = 1000
-    A = 0.1 * torch.rand(n, n, dtype=torch.float64)
-    A = A + A.T
     k = 300
     print("\n----- test_normal -----")
     print("----- Dimension of real symmetric matrix A: %d -----" % n)
     print("Running times: ")
+    for i in range(1):
+        A = 0.1 * torch.rand(n, n, dtype=torch.float64)
+        A = A + A.T
 
-    start = time.time()
-    eigval_min, eigvector_min, eigval_max, eigvector_max = symeigLanczos(A, k)
-    end = time.time()
-    print("Lanczos: ", end - start)
+        start = time.time()
+        eigval_min, eigvector_min, eigval_max, eigvector_max = symeigLanczos(A, k)
+        end = time.time()
+        print("Lanczos: ", end - start, end="    ")
 
-    start = time.time()
+        start = time.time()
+        eigvals, eigvectors = torch.symeig(A, eigenvectors=True)
+        end = time.time()
+        print("Pytorch: ", end - start)
+
+        assert torch.allclose(eigval_min, eigvals[0])
+        assert torch.allclose(eigval_max, eigvals[-1])
+        assert torch.allclose(eigvector_min, eigvectors[:, 0]) or \
+                torch.allclose(eigvector_min, -eigvectors[:, 0])
+        assert torch.allclose(eigvector_max, eigvectors[:, -1]) or \
+                torch.allclose(eigvector_max, -eigvectors[:, -1])
+
+def test_normal_gpu():
+    n = 1000
+    k = 300
+    cuda = torch.device("cuda")
+    print("\n----- test_normal_gpu -----")
+    print("----- Dimension of real symmetric matrix A: %d -----" % n)
+    print("Running times: ")
+    for i in range(1):
+        A = 0.1 * torch.rand(n, n, dtype=torch.float64, device=cuda)
+        A = A + A.T
+
+        start = time.time()
+        eigval_min, eigvector_min, eigval_max, eigvector_max = symeigLanczos(A, k, 
+                device=cuda)
+        end = time.time()
+        print("Lanczos: ", end - start, end="    ")
+
+        start = time.time()
+        eigvals, eigvectors = torch.symeig(A, eigenvectors=True)
+        end = time.time()
+        print("Pytorch: ", end - start)
+
+        assert torch.allclose(eigval_min, eigvals[0])
+        assert torch.allclose(eigval_max, eigvals[-1])
+        assert torch.allclose(eigvector_min, eigvectors[:, 0]) or \
+                torch.allclose(eigvector_min, -eigvectors[:, 0])
+        assert torch.allclose(eigvector_max, eigvectors[:, -1]) or \
+                torch.allclose(eigvector_max, -eigvectors[:, -1])
+
+def test_sparse():
+    n = 1000
+    k = 300
+    A = 0.1 * torch.rand(n, n, dtype=torch.float64)
+    A = A + A.T
+    dim = A.shape[0]
+    Amap = lambda v: torch.matmul(A, v)
+    eigval_min, eigvector_min, eigval_max, eigvector_max = symeigLanczos(Amap, k, sparse=True, dim=dim)
     eigvals, eigvectors = torch.symeig(A, eigenvectors=True)
-    end = time.time()
-    print("Pytorch: ", end - start)
-
     assert torch.allclose(eigval_min, eigvals[0])
     assert torch.allclose(eigval_max, eigvals[-1])
     assert torch.allclose(eigvector_min, eigvectors[:, 0]) or \
@@ -28,14 +74,16 @@ def test_normal():
     assert torch.allclose(eigvector_max, eigvectors[:, -1]) or \
             torch.allclose(eigvector_max, -eigvectors[:, -1])
 
-def test_sparse():
+def test_sparse_gpu():
     n = 1000
-    A = 0.1 * torch.rand(n, n, dtype=torch.float64)
+    k = 300
+    cuda = torch.device("cuda")
+    A = 0.1 * torch.rand(n, n, dtype=torch.float64, device=cuda)
     A = A + A.T
     dim = A.shape[0]
     Amap = lambda v: torch.matmul(A, v)
-    k = 300
-    eigval_min, eigvector_min, eigval_max, eigvector_max = symeigLanczos(Amap, k, sparse=True, dim=dim)
+    eigval_min, eigvector_min, eigval_max, eigvector_max = symeigLanczos(Amap, k, 
+            device=cuda, sparse=True, dim=dim)
     eigvals, eigvectors = torch.symeig(A, eigenvectors=True)
     assert torch.allclose(eigval_min, eigvals[0])
     assert torch.allclose(eigval_max, eigvals[-1])

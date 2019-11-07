@@ -1,6 +1,6 @@
 import torch
 
-def Lanczos(A, k, *, sparse=False, dim=None):
+def Lanczos(A, k, device=torch.device("cpu"), *, sparse=False, dim=None):
     """
         Lanczos iteration algorithm on a real symmetric matrix using Pytorch.
 
@@ -46,17 +46,17 @@ def Lanczos(A, k, *, sparse=False, dim=None):
         n = A.shape[0]
         dtype = A.dtype
         Amap = lambda v: torch.matmul(A, v)
-    Qk = torch.zeros((n, k), dtype=dtype)
-    alphas = torch.zeros(k, dtype=dtype)
-    betas = torch.zeros(k - 1, dtype=dtype)
-    q = torch.randn(n, dtype=dtype)
+    Qk = torch.zeros((n, k), dtype=dtype, device=device)
+    alphas = torch.zeros(k, dtype=dtype, device=device)
+    betas = torch.zeros(k - 1, dtype=dtype, device=device)
+    q = torch.randn(n, dtype=dtype, device=device)
     q = q / torch.norm(q)
     u = Amap(q)
     alpha = torch.matmul(q, u)
     Qk[:, 0] = q
     alphas[0] = alpha
     beta = 0
-    qprime = torch.randn(n, dtype=dtype)
+    qprime = torch.randn(n, dtype=dtype, device=device)
     for i in range(1, k):
         r = u - alpha * q - beta * qprime
 
@@ -76,7 +76,8 @@ def Lanczos(A, k, *, sparse=False, dim=None):
     T = torch.diag(alphas) + torch.diag(betas, diagonal=1) + torch.diag(betas, diagonal=-1)
     return Qk, T
 
-def symeigLanczos(A, k, extreme="both", *, sparse=False, dim=None):
+def symeigLanczos(A, k, device=torch.device("cpu"), extreme="both", *, 
+                    sparse=False, dim=None):
     """
         This function computes the extreme(minimum or maximum, or both) eigenvalues
     and corresponding eigenvectors of a real symmetric matrix A based on Lanczos algorithm.
@@ -93,7 +94,7 @@ def symeigLanczos(A, k, extreme="both", *, sparse=False, dim=None):
     Output: As shown in "Input" section above. Note all the elements of
             returned tuples are torch Tensors, including the eigenvalues.
     """
-    Qk, T = Lanczos(A, k, sparse=sparse, dim=dim)
+    Qk, T = Lanczos(A, k, device=device, sparse=sparse, dim=dim)
     eigvalsQ, eigvectorsQ = torch.symeig(T, eigenvectors=True)
     eigvectorsQ = torch.matmul(Qk, eigvectorsQ)
     if extreme == "both":
@@ -114,21 +115,23 @@ class DominantSymeig(torch.autograd.Function):
             eigvector -- corresponding (non-degenerate) eigenvector.
     """ 
     @staticmethod
-    def forward(ctx, A, k):
-        eigval, eigvector = symeigLanczos(A, k, extreme="min")
+    def forward(ctx, A, k, device=torch.device("cpu")):
+        eigval, eigvector = symeigLanczos(A, k, device=device, extreme="min")
         ctx.save_for_backward(A, eigval, eigvector)
+        ctx.device = device
         return eigval, eigvector
     @staticmethod
     def backward(ctx, grad_eigval, grad_eigvector):
         from .CG import CGSubspace
         A, eigval, eigvector = ctx.saved_tensors
-        Aprime = A - eigval * torch.eye(A.shape[0], dtype=A.dtype)
+        device = ctx.device
+        Aprime = A - eigval * torch.eye(A.shape[0], device=device, dtype=A.dtype)
         cg = CGSubspace.apply
         b = grad_eigvector - torch.matmul(eigvector, grad_eigvector) * eigvector
         lambda0 = cg(Aprime, b, eigvector)
         grad_A = (grad_eigval * eigvector - lambda0)[:, None] * eigvector
-        grad_k = None
-        return grad_A, grad_k
+        grad_k = grad_device = None
+        return grad_A, grad_k, grad_device
 
 def setDominantSparseSymeig(A, Aadjoint_to_gadjoint):
     """
@@ -168,8 +171,9 @@ def setDominantSparseSymeig(A, Aadjoint_to_gadjoint):
     setCGSubspaceSparse(A, Aadjoint_to_gadjoint)
     from .CG import CGSubspaceSparse
     @staticmethod
-    def forward(ctx, g, k, dim):
-        eigval, eigvector = symeigLanczos(A, k, extreme="min", sparse=True, dim=dim)
+    def forward(ctx, g, k, dim, device=torch.device("cpu")):
+        eigval, eigvector = symeigLanczos(A, k, device=device, 
+                extreme="min", sparse=True, dim=dim)
         ctx.save_for_backward(g, eigval, eigvector)
         return eigval, eigvector
     @staticmethod
@@ -181,7 +185,7 @@ def setDominantSparseSymeig(A, Aadjoint_to_gadjoint):
         grad_A = grad_eigval * eigvector - lambda0, eigvector
         v1, v2 = grad_A
         grad_g = Aadjoint_to_gadjoint(v1, v2)
-        grad_k = grad_dim = None
-        return grad_g, grad_k, grad_dim
+        grad_k = grad_dim = grad_device = None
+        return grad_g, grad_k, grad_dim, grad_device
     DominantSparseSymeig = type("DominantSparseSymeig", (torch.autograd.Function, ), 
             {"forward": forward, "backward": backward})
