@@ -1,3 +1,4 @@
+import pytest
 import time
 import torch
 from DominantSparseEigenAD.Lanczos import symeigLanczos, DominantSymeig
@@ -29,6 +30,8 @@ def test_normal():
         assert torch.allclose(eigvector_max, eigvectors[:, -1]) or \
                 torch.allclose(eigvector_max, -eigvectors[:, -1])
 
+@pytest.mark.skipif(not torch.cuda.is_available(), 
+        reason="No GPU support in online test envionment")
 def test_normal_gpu():
     n = 1000
     k = 300
@@ -74,6 +77,8 @@ def test_sparse():
     assert torch.allclose(eigvector_max, eigvectors[:, -1]) or \
             torch.allclose(eigvector_max, -eigvectors[:, -1])
 
+@pytest.mark.skipif(not torch.cuda.is_available(), 
+        reason="No GPU support in online test envionment")
 def test_sparse_gpu():
     n = 1000
     k = 300

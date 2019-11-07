@@ -1,3 +1,4 @@
+import pytest
 import torch
 from DominantSparseEigenAD.CG import CG_torch
 
@@ -40,6 +41,8 @@ def test_lowrank():
                           torch.zeros(1, dtype=torch.float64), 
                           atol=1e-06)
 
+@pytest.mark.skipif(not torch.cuda.is_available(), 
+        reason="No GPU support in online test envionment")
 def test_fullrank_gpu():
     import numpy as np
     from scipy.stats import ortho_group
@@ -61,6 +64,8 @@ def test_fullrank_gpu():
     groundtruth = torch.inverse(A).matmul(b)
     assert torch.allclose(x, groundtruth)
 
+@pytest.mark.skipif(not torch.cuda.is_available(), 
+        reason="No GPU support in online test envionment")
 def test_lowrank_gpu():
     n = 300
     cuda = torch.device("cuda")
