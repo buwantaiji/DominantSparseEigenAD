@@ -1,4 +1,4 @@
-import pytest
+import time, pytest
 import torch
 from DominantSparseEigenAD.CG import CG_torch
 
@@ -14,12 +14,17 @@ def test_fullrank():
     """
     A = U.dot(np.diag(diagonal)).dot(U.T)       
     A = torch.from_numpy(A).to(torch.float64)
+    print("\n----- test_fullrank -----")
+    print("----- Dimension of matrix A: %d -----" % n)
 
     b = torch.randn(n, dtype=torch.float64)
     initialx = torch.randn(n, dtype=torch.float64)
+
+    start = time.time()
     x = CG_torch(A, b, initialx)
-    groundtruth = torch.inverse(A).matmul(b)
-    assert torch.allclose(x, groundtruth)
+    end = time.time()
+    print("CG_torch time: ", end - start)
+    assert torch.allclose(A.matmul(x), b)
 
 def test_lowrank():
     n = 300
@@ -87,4 +92,3 @@ def test_lowrank_gpu():
     assert torch.allclose(torch.matmul(result, x)[None], 
                           torch.zeros(1, device=cuda, dtype=dtype), 
                           atol=1e-06)
-
