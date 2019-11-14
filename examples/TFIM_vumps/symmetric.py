@@ -1,13 +1,20 @@
+"""
+    Variational MPS optimization of 1D Transverse Field Ising Model(TFIM).
+In this implementation, A in the MPS is a real rank-3 tensor that is symmetric
+under permutation of the two virtual indices.
+"""
 import numpy as np
 import torch
 from DominantSparseEigenAD.Lanczos import DominantSymeig
 
 class TFIM(torch.nn.Module):
-    def __init__(self, D):
+    def __init__(self, D, k):
         super(TFIM, self).__init__()
         self.d = 2
         self.D = D
-        self.k = 200
+        self.k = k
+        print("----- MPS representation of 1D TFIM -----")
+        print("Symmetric setting. D =", self.D)
         self.symeig_lanczos = DominantSymeig.apply
     def seth(self, g):
         """
@@ -30,7 +37,6 @@ class TFIM(torch.nn.Module):
     def forward(self):
         A = 0.5 * (self.A + self.A.permute(0, 2, 1))
         Gong = torch.einsum("kij,kmn->imjn", A, A).reshape(self.D**2, self.D**2)
-        #print(Gong)
         minus_Gong = - Gong
         eigval_max, eigvector_max = self.symeig_lanczos(minus_Gong, self.k)
         eigvector_max = eigvector_max.reshape(self.D, self.D)
@@ -40,7 +46,8 @@ class TFIM(torch.nn.Module):
 
 if __name__ == "__main__":
     D = 20
-    model = TFIM(D)
+    k = 200
+    model = TFIM(D, k)
     data_E0 = np.load("TFIM/datas/E0_N_100000.npz")
     gs = data_E0["gs"]
     E0s = data_E0["E0s"]

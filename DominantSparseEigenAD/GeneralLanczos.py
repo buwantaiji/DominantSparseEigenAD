@@ -3,6 +3,21 @@ import numpy as np
 from scipy.sparse import linalg as sparselinalg
 
 class DominantEig(torch.autograd.Function):
+    """
+        Function primitive of dominant eigensolver, where the matrix is real
+    and only assumed to be diagonalizable. In addition, since Pytorch doesn't
+    support complex numbers, the desired eigenvalue of the matrix (hence in turn
+    the corresponding left/right eigenvectors) should be real.
+
+    input: A -- the real matrix A.
+           k -- number of Lanczos vectors requested.(doesn't need gradient)
+    output: eigval -- the largest-amplitude eigenvalue of A.
+            lefteigvector -- corresponding (non-degenerate) left eigenvector l.
+            righteigvector -- corresponding (non-degenerate) right eigenvector r.
+                Conventionally, the left and right eigenvector obey the orthogonal
+            relation l^T r = 1. In addition, the normalization r^T r = 1 is chosen,
+            but this shouldn't have any effect on gauge invariant computation process.
+    """
     @staticmethod
     def forward(ctx, A, k):
         A_numpy = A.detach().numpy()
