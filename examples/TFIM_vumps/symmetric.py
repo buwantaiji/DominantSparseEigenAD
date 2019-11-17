@@ -48,7 +48,7 @@ if __name__ == "__main__":
     D = 20
     k = 200
     model = TFIM(D, k)
-    data_E0 = np.load("TFIM/datas/E0_N_100000.npz")
+    data_E0 = np.load("../TFIM/datas/E0_N_100000.npz")
     gs = data_E0["gs"]
     E0s = data_E0["E0s"]
 
