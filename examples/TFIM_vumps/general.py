@@ -95,8 +95,9 @@ class TFIM(torch.nn.Module):
         return E0
 
 if __name__ == "__main__":
-    D = 10
-    k = 70
+    import time
+    D = 100
+    k = 200
     model = TFIM(D, k)
     data_E0 = np.load("datas/E0_sum.npz")
     gs = data_E0["gs"]
@@ -114,18 +115,20 @@ if __name__ == "__main__":
     for i in range(Npoints):
         model.seth(gs[i])
         model.setparameters()
-        optimizer = torch.optim.LBFGS(model.parameters(), lr=1, max_iter=10,
-                        tolerance_grad=1e-15, tolerance_change=1e-15)
+        optimizer = torch.optim.LBFGS(model.parameters(), max_iter=20,
+            tolerance_grad=0.0, tolerance_change=0.0, line_search_fn="strong_wolfe")
         print("g = %f, E0 = %.15f" % (gs[i], E0s[i]))
         iter_num = 100
         for epoch in range(iter_num):
+            start = time.time()
             E0 = optimizer.step(closure)
-            print("iter: ", epoch, E0.item())
+            end = time.time()
+            print("iter: ", epoch, E0.item(), end - start)
             if epoch == iter_num - 1:
                 E0s_general[i] = E0.detach().numpy()
 
     for i in range(Npoints):
         print("%f: %.15f, \t%.15f" % (gs[i], E0s[i], E0s_general[i]))
 
-    filename = "datas/E0_general_D_%d.npz" % D
+    filename = "datas/E0s_general1/D_%d.npz" % D
     np.savez(filename, gs=gs, E0s=E0s_general)
