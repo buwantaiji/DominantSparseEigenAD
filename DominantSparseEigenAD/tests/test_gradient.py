@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from DominantSparseEigenAD.GeneralLanczos import DominantEig
+from DominantSparseEigenAD.eig import DominantEig
 
 def test_eigs_gradient():
     D = 5

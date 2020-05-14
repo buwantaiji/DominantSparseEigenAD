@@ -6,8 +6,8 @@ symmetry presumptions.
 import numpy as np
 import scipy.sparse.linalg as sparselinalg
 import torch
-from DominantSparseEigenAD.GeneralLanczos import DominantEig
-import DominantSparseEigenAD.GeneralLanczos as generallanczos
+from DominantSparseEigenAD.eig import DominantEig
+import DominantSparseEigenAD.eig as eig
 
 class TFIM(torch.nn.Module):
     def __init__(self, D, k):
@@ -85,9 +85,8 @@ class TFIM(torch.nn.Module):
         optimized and accelerated.
         """
         self._setsparsefunctions()
-        generallanczos.setDominantSparseEig(self.Gong, self.GongT,
-                self.Gongadjoint_to_Aadjoint)
-        dominant_sparse_eig = generallanczos.DominantSparseEig.apply
+        eig.setDominantSparseEig(self.Gong, self.GongT, self.Gongadjoint_to_Aadjoint)
+        dominant_sparse_eig = eig.DominantSparseEig.apply 
         eigval_max, leigvector_max, reigvector_max = dominant_sparse_eig(self.A, self.k)
         leigvector_max = leigvector_max.reshape(self.D, self.D)
         reigvector_max = reigvector_max.reshape(self.D, self.D)

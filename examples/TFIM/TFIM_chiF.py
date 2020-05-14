@@ -28,7 +28,7 @@ def chiF_matrixAD(model, k):
         Compute chi_F using the DominantSymeig primitive, where the matrix to be
     diagonalized is represented as the normal form of a torch.Tensor.
     """
-    from DominantSparseEigenAD.Lanczos import DominantSymeig
+    from DominantSparseEigenAD.symeig import DominantSymeig
     dominant_symeig = DominantSymeig.apply
     E0, psi0 = dominant_symeig(model.Hmatrix, k, model.device)
     logF = torch.log(psi0.detach().matmul(psi0))
@@ -42,9 +42,9 @@ def chiF_sparseAD(model, k):
         Compute chi_F using the DominantSparseSymeig primitive, where the matrix 
     to be diagonalized is "sparse" and represented as a function.
     """
-    import DominantSparseEigenAD.Lanczos as lanczos
-    lanczos.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
-    dominant_sparse_symeig = lanczos.DominantSparseSymeig.apply
+    import DominantSparseEigenAD.symeig as symeig
+    symeig.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
+    dominant_sparse_symeig = symeig.DominantSparseSymeig.apply
     E0, psi0 = dominant_sparse_symeig(model.g, k, model.dim, model.device)
     logF = torch.log(psi0.detach().matmul(psi0))
     dlogF, = torch.autograd.grad(logF, model.g, create_graph=True)

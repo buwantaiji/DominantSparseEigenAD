@@ -41,7 +41,7 @@ def E0_matrixAD(model, k):
     DominantSymeig primitive, where the matrix to be diagonalized is represented as
     the normal form of a torch.Tensor.
     """
-    from DominantSparseEigenAD.Lanczos import DominantSymeig
+    from DominantSparseEigenAD.symeig import DominantSymeig
     dominant_symeig = DominantSymeig.apply
     E0, psi0 = dominant_symeig(model.Hmatrix, k, model.device)
     dE0, = torch.autograd.grad(E0, model.g, create_graph=True)
@@ -56,9 +56,9 @@ def E0_sparseAD(model, k):
     DominantSparseSymeig primitive, where the matrix to be diagonalized is "sparse"
     and represented as a function.
     """
-    import DominantSparseEigenAD.Lanczos as lanczos
-    lanczos.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
-    dominant_sparse_symeig = lanczos.DominantSparseSymeig.apply
+    import DominantSparseEigenAD.symeig as symeig
+    symeig.setDominantSparseSymeig(model.H, model.Hadjoint_to_gadjoint)
+    dominant_sparse_symeig = symeig.DominantSparseSymeig.apply
     E0, psi0 = dominant_sparse_symeig(model.g, k, model.dim, model.device)
     dE0, = torch.autograd.grad(E0, model.g, create_graph=True)
     d2E0, = torch.autograd.grad(dE0, model.g)

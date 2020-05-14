@@ -5,7 +5,7 @@ under permutation of the two virtual indices.
 """
 import numpy as np
 import torch
-from DominantSparseEigenAD.Lanczos import DominantSymeig
+from DominantSparseEigenAD.symeig import DominantSymeig
 
 class TFIM(torch.nn.Module):
     def __init__(self, D, k):

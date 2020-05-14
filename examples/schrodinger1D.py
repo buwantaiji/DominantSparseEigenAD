@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import DominantSparseEigenAD.Lanczos as lanczos
+import DominantSparseEigenAD.symeig as symeig
 import matplotlib.pyplot as plt
 
 class Schrodinger1D(torch.nn.Module):
@@ -55,7 +55,7 @@ class Schrodinger1D(torch.nn.Module):
             Dominant diagonalization of Hamiltonian using DominantSymeig primitive, 
         where the Hamiltonian is represented in normal form as a torch.Tensor.
         """
-        dominant_symeig = lanczos.DominantSymeig.apply
+        dominant_symeig = symeig.DominantSymeig.apply
         V = torch.diag(self.potential)
         H = self.K + V
         _, self.psi0 = dominant_symeig(H, k)
@@ -66,8 +66,8 @@ class Schrodinger1D(torch.nn.Module):
             Dominant diagonalization of Hamiltonian using DominantSparseSymeig
         primitive, where the Hamiltonian is represented in sparse form as a function.
         """
-        lanczos.setDominantSparseSymeig(self.Hsparse, self.Hadjoint_to_padjoint)
-        dominant_sparse_symeig = lanczos.DominantSparseSymeig.apply
+        symeig.setDominantSparseSymeig(self.Hsparse, self.Hadjoint_to_padjoint)
+        dominant_sparse_symeig = symeig.DominantSparseSymeig.apply
         _, self.psi0 = dominant_sparse_symeig(self.potential, k, self.N)
         loss = 1. - (self.psi0.abs() * target).sum()
         return loss
