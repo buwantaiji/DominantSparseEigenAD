@@ -16,7 +16,7 @@ class TFIM(torch.nn.Module):
         self.D = D
         self.k = k
         print("----- MPS representation of 1D TFIM -----")
-        print("General setting. D = %d, k = %d." % (self.D, self.k))
+        print("General setting. D =", self.D)
         self.dominant_eig = DominantEig.apply
     def seth(self, g):
         """
@@ -31,14 +31,8 @@ class TFIM(torch.nn.Module):
         self.h[0, 0, 1, 0] = self.h[1, 1, 1, 0] = \
         self.h[0, 1, 1, 1] = self.h[1, 0, 1, 1] = -g/2
 
-    def setparameters(self, initA=None):
-        #A = torch.randn(self.d, self.D, self.D, dtype=torch.float64) if initA is None else initA
-        if initA is None:
-            A = torch.randn(self.d, self.D, self.D, dtype=torch.float64)
-            print("Random initialization.")
-        else:
-            A = initA
-            print("Initialization using the last optimized result.")
+    def setparameters(self):
+        A = torch.randn(self.d, self.D, self.D, dtype=torch.float64)
         self.A = torch.nn.Parameter(A)
 
     def matrix_forward(self):
@@ -101,49 +95,39 @@ class TFIM(torch.nn.Module):
 
 if __name__ == "__main__":
     import time
+    D = 100
+    k = 200
+    model = TFIM(D, k)
     data_E0 = np.load("datas/E0_sum.npz")
     gs = data_E0["gs"]
     E0s = data_E0["E0s"]
+    Npoints = gs.size
+    E0s_general = np.empty(Npoints)
 
-    for g_idx in [3, 4, 5]:
-        g, E0 = gs[g_idx], E0s[g_idx]
-        print("g = %f, E0 = %.15f" % (g, E0))
+    def closure():
+        #E0 = model.matrix_forward()
+        E0 = model.sparse_forward()
+        optimizer.zero_grad()
+        E0.backward()
+        return E0
 
-        Ds = np.arange(5, 100+1, step=5)
-        ks = np.array([10, 50, 80, 80, 100, 100] + [200] * 14)
-        Npoints = Ds.size
-        E0s_general = np.empty(Npoints)
+    for i in range(Npoints):
+        model.seth(gs[i])
+        model.setparameters()
+        optimizer = torch.optim.LBFGS(model.parameters(), max_iter=20,
+            tolerance_grad=0.0, tolerance_change=0.0, line_search_fn="strong_wolfe")
+        print("g = %f, E0 = %.15f" % (gs[i], E0s[i]))
+        iter_num = 100
+        for epoch in range(iter_num):
+            start = time.time()
+            E0 = optimizer.step(closure)
+            end = time.time()
+            print("iter: ", epoch, E0.item(), end - start)
+            if epoch == iter_num - 1:
+                E0s_general[i] = E0.detach().numpy()
 
-        def closure():
-            #E0 = model.matrix_forward()
-            E0 = model.sparse_forward()
-            optimizer.zero_grad()
-            E0.backward()
-            return E0
+    for i in range(Npoints):
+        print("%f: %.15f, \t%.15f" % (gs[i], E0s[i], E0s_general[i]))
 
-        initA = None
-        for i in range(Npoints):
-            D, k = Ds[i], ks[i]
-            model = TFIM(D, k)
-            model.seth(g)
-            model.setparameters(initA=initA)
-            optimizer = torch.optim.LBFGS(model.parameters(), max_iter=20,
-                tolerance_grad=0.0, tolerance_change=0.0, line_search_fn="strong_wolfe")
-            iter_num = 60
-            for epoch in range(iter_num):
-                start = time.time()
-                E0 = optimizer.step(closure)
-                end = time.time()
-                print("iter: ", epoch, E0.item(), end - start)
-                if epoch == iter_num - 1:
-                    E0s_general[i] = E0.detach().numpy()
-                    if i != Npoints - 1:
-                        Dnew = Ds[i+1]
-                        initA = 1. * torch.randn(model.d, Dnew, Dnew, dtype=torch.float64)
-                        initA[:, :D, :D] = model.A.detach()
-
-        for i in range(Npoints):
-            print("D = %d: \t%.15f" % (Ds[i], E0s_general[i]))
-
-        filename = "datas/E0s_general/g_%.2f.npz" % g
-        np.savez(filename, Ds=Ds, E0s=E0s_general)
+    filename = "datas/E0s_general1/D_%d.npz" % D
+    np.savez(filename, gs=gs, E0s=E0s_general)

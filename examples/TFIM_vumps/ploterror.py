@@ -21,6 +21,9 @@ analytic_E0 = np.load("datas/E0_sum.npz")
 gs = analytic_E0["gs"]
 E0s = analytic_E0["E0s"]
 
+gs, E0s = gs[3:6], E0s[3:6]
+
+"""
 vumps_data_dir = "datas/E0s_general1/"
 errors = np.empty((gs.size, Ds.size))
 for col in range(Ds.size):
@@ -28,8 +31,17 @@ for col in range(Ds.size):
     #error_D = np.log10( np.abs((E0_D - E0s) / E0s) )
     error_D = np.abs((E0_D - E0s) / E0s)
     errors[:, col] = error_D
+"""
 
-#for row in range(gs.size):
+vumps_data_dir = "datas/E0s_general/"
+errors = np.empty((gs.size, Ds.size))
+for row in range(gs.size):
+    E0_g = np.load(vumps_data_dir + "g_%.2f.npz" % gs[row])["E0s"]
+    print("g:", gs[row], E0_g)
+    error_g = np.abs((E0_g - E0s[row]) / E0s[row])
+    errors[row, :] = error_g
+
+"""
 for i in range(1, 5):
     for row in [4 - i, 4, 4 + i]:
         plt.plot(Ds, errors[row, :], "o-", label=r"$g = %.2f$" % gs[row])
@@ -40,3 +52,14 @@ for i in range(1, 5):
     plt.subplots_adjust(bottom=0.15, left=0.15)
     plt.savefig(vumps_data_dir + "error%d.pdf" % i)
     plt.show()
+"""
+
+for row in range(3):
+    plt.plot(Ds, errors[row, :], "o-", label=r"$g = %.2f$" % gs[row])
+plt.legend()
+plt.xlabel(r"$D$")
+plt.ylabel(r"Energy relative error")
+plt.yscale("log")
+plt.subplots_adjust(bottom=0.15, left=0.15)
+plt.savefig(vumps_data_dir + "error.pdf")
+plt.show()
