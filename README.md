@@ -2,9 +2,9 @@
 
 [![Build Status](https://travis-ci.com/buwantaiji/DominantSparseEigenAD.svg?branch=master)](https://travis-ci.com/buwantaiji/DominantSparseEigenAD)
 
-DominantSparseEigenAD is an extension of PyTorch that handles reverse-mode automatic differentiation of dominant eigen-decomposition. 
+DominantSparseEigenAD is an extension of PyTorch that handles reverse-mode automatic differentiation of dominant eigen-decomposition process. 
 
-In many researches and applications involving matrix diagonalization, typically in the context of eigenvalue problem in quantum mechanics, only a small proportion of eigenvalues (e.g., the smallest ones) and corresponding eigenvectors are of practical interest. This library provides corresponding primitives in the framework of PyTorch to automatically differentiate this process, without any direct access of the full spectrum of the matrix being diagonalized.
+In many researches and applications involving matrix diagonalization, typically in the context of eigenvalue problem in quantum mechanics, only a small proportion of eigenvalues (e.g., the smallest ones) and corresponding eigenvectors are of practical interest. This library provides corresponding primitives in the framework of PyTorch to automatically differentiate this process, without any direct access to the full spectrum of the matrix being diagonalized.
 
 
 
@@ -74,7 +74,7 @@ This primitive is used in the case where **the matrix is assumed to be real symm
 - **k**: `int` - the number of Lanczos vectors requested. In typical applications, `k` is far less than the dimension $N$ of the matrix. The choice of several hundreds for `k` may be satisfactory for $N$ up to 100000. Note that `k` should never exceeds $N$ in any cases.
 - **dim**: `int` - the dimension of the matrix. 
 
-Only the gradient of the parameter `p` will be computed when performing backward AD. The other two arguments `k` and `dim` doesn't require computing gradients.
+Only the gradient of the parameter `p` will be computed when performing backward AD. The other two arguments `k` and `dim` do not require computing gradients.
 
 **Important Note**: To make this primitive work properly, two additional quantities, `A` and `Aadjoint_to_padjoint`, should be provided by users before the primitive is actually available in the running session: (See the second line of the code above)
 
@@ -184,7 +184,7 @@ Only the gradient of the parameter `p` will be computed when performing backward
   $$
   The final result of the adjoint $\overline{p}$ should be returned as a `torch.Tensor`.
 
-  See also the primitive [DominantSparseSymeig](# dominantsparsesymeig) for some simple examples. For a more complete application, see [the VUMPS example](examples/TFIM_vumps/general.py).
+  See also the primitive [DominantSparseSymeig](#dominantsparsesymeig) for some simple examples. For a more complete application, see [the VUMPS example](examples/TFIM_vumps/general.py).
 
 ## Outlook
 
