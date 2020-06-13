@@ -135,6 +135,7 @@ if __name__ == "__main__":
                 E0 = optimizer.step(closure)
                 end = time.time()
                 print("iter: ", epoch, E0.item(), end - start)
+                #print(model.A.detach().max().item(), model.A.grad.max().item())
                 if epoch == iter_num - 1:
                     E0s_general[i] = E0.detach().numpy()
                     if i != Npoints - 1:

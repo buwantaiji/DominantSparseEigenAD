@@ -1,7 +1,10 @@
 """
     Variational MPS optimization of 1D Transverse Field Ising Model(TFIM).
 In this implementation, A in the MPS is a real rank-3 tensor that is symmetric
-under permutation of the two virtual indices.
+under permutation of the two virtual indices. As a result, the transfer matrix
+is symmetric.
+    Note that this implementation is somewhat deprecated regarding this symmetry
+restriction. For a more complete implementation, see the file general.py.
 """
 import numpy as np
 import torch
@@ -15,7 +18,7 @@ class TFIM(torch.nn.Module):
         self.k = k
         print("----- MPS representation of 1D TFIM -----")
         print("Symmetric setting. D =", self.D)
-        self.symeig_lanczos = DominantSymeig.apply
+        self.dominant_symeig = DominantSymeig.apply
     def seth(self, g):
         """
             Construct the nearest neighbor hamiltonian for given parameter g of
@@ -38,7 +41,7 @@ class TFIM(torch.nn.Module):
         A = 0.5 * (self.A + self.A.permute(0, 2, 1))
         Gong = torch.einsum("kij,kmn->imjn", A, A).reshape(self.D**2, self.D**2)
         minus_Gong = - Gong
-        eigval_max, eigvector_max = self.symeig_lanczos(minus_Gong, self.k)
+        eigval_max, eigvector_max = self.dominant_symeig(minus_Gong, self.k)
         eigvector_max = eigvector_max.reshape(self.D, self.D)
         E0 = torch.einsum("aik,bkj,abcd,cml,dln,im,jn", A, A, self.h, 
                 A, A, eigvector_max, eigvector_max) / eigval_max**2
@@ -46,9 +49,9 @@ class TFIM(torch.nn.Module):
 
 if __name__ == "__main__":
     D = 20
-    k = 200
+    k = 100
     model = TFIM(D, k)
-    data_E0 = np.load("../TFIM/datas/E0_N_100000.npz")
+    data_E0 = np.load("datas/E0_sum.npz")
     gs = data_E0["gs"]
     E0s = data_E0["E0s"]
 
@@ -58,7 +61,7 @@ if __name__ == "__main__":
         E0.backward()
         return E0
 
-    for i in [5, 15, 25, 35, 45, 55, 65, 75, 85, 95]:
+    for i in [3, 4, 5]:
         model.seth(gs[i])
         model.setparameters()
         optimizer = torch.optim.LBFGS(model.parameters(), max_iter=10, tolerance_grad=1E-7)
