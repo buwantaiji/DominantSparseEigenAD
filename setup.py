@@ -8,7 +8,7 @@ setuptools.setup(
     version="0.0.1",
     author="Hao Xie",
     author_email="xiehao18@iphy.ac.cn",
-    description="Backward AD of dominant sparse eigensolver using Pytorch.",
+    description="Reverse-mode AD of dominant sparse eigensolver using Pytorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     keywords="automatic differentiation dominant eigensolver Pytorch",
