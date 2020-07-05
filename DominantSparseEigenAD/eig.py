@@ -20,10 +20,10 @@ class DominantEig(torch.autograd.Function):
             but this shouldn't have any effect on gauge invariant computation process.
     """
     @staticmethod
-    def forward(ctx, A, k):
+    def forward(ctx, A, which="LM", k=None):
         A_numpy = A.detach().numpy()
-        righteigval, righteigvector = sparselinalg.eigs(A_numpy, k=1, which="LM", ncv=k)
-        lefteigval, lefteigvector = sparselinalg.eigs(A_numpy.T, k=1, which="LM", ncv=k)
+        righteigval, righteigvector = sparselinalg.eigs(A_numpy, k=1, which=which, ncv=k)
+        lefteigval, lefteigvector = sparselinalg.eigs(A_numpy.T, k=1, which=which, ncv=k)
         assert np.allclose(righteigval.imag, 0.0), \
                 "The desired eigenvalue of the matrix must be real"
         eigval = righteigval.real
@@ -54,8 +54,8 @@ class DominantEig(torch.autograd.Function):
         grad_A = grad_eigval.numpy() * lefteigvector[:, None] * righteigvector \
                     - lefteigvector[:, None] * lambdal0 \
                     - lambdar0[:, None] * righteigvector
-        grad_A, grad_k = torch.from_numpy(grad_A), None
-        return grad_A, grad_k
+        grad_A, grad_which, grad_k = torch.from_numpy(grad_A), None, None
+        return grad_A, grad_which, grad_k
 
 def setDominantSparseEig(A, AT, Aadjoint_to_gadjoint):
     """
