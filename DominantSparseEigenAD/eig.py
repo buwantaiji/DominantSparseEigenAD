@@ -12,7 +12,11 @@ class DominantEig(torch.autograd.Function):
 
     input: A -- the real matrix A.
            k -- number of Lanczos vectors requested.(doesn't need gradient)
-    output: eigval -- the largest-amplitude eigenvalue of A.
+           which -- a string indicating which eigenvalus and corresponding eigenvectors
+                    to find. It can take one of the following values:
+                    "LM"(default): largest magnitude;    "SM": smallest magnitude;
+                    "LR": largest real part;    "SR": smallest real part.
+    output: eigval -- the desired eigenvalue of A, as specified by the argument "which".
             lefteigvector -- corresponding (non-degenerate) left eigenvector l.
             righteigvector -- corresponding (non-degenerate) right eigenvector r.
                 Conventionally, the left and right eigenvector obey the orthogonal
@@ -20,7 +24,7 @@ class DominantEig(torch.autograd.Function):
             but this shouldn't have any effect on gauge invariant computation process.
     """
     @staticmethod
-    def forward(ctx, A, which="LM", k=None):
+    def forward(ctx, A, k, which="LM"):
         A_numpy = A.detach().numpy()
         righteigval, righteigvector = sparselinalg.eigs(A_numpy, k=1, which=which, ncv=k)
         lefteigval, lefteigvector = sparselinalg.eigs(A_numpy.T, k=1, which=which, ncv=k)
